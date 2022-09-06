@@ -16,7 +16,7 @@ namespace CryptoClientLib
     {
         private string publicKey;
         private string privateKey;
-        public readonly Uri uri = new Uri("https://api.binance.com");
+        public const string uri = "https://api.binance.com";
         private HttpClient client;
 
         public BinanceClient(string publicKey, string privateKey)
@@ -24,7 +24,7 @@ namespace CryptoClientLib
             this.publicKey = publicKey;
             this.privateKey = privateKey;
             client = new HttpClient();
-            client.BaseAddress = uri;
+            //client.BaseAddress = uri;
         }
 
         public string Timestamp
@@ -35,22 +35,23 @@ namespace CryptoClientLib
         public double GetPrice(Symbol symbol)
         {
 	        var path = "api/v3/ticker/price?";
-	        Dictionary<string, string> listOfPairs = new Dictionary<string, string>();
-	        listOfPairs.Add("symbol", symbol.ToString());
+	        List<Tuple<string, string>> queryPairs = new List<Tuple<string, string>>();
+	        queryPairs.Add(new Tuple<string, string>("symbol", symbol.ToString()));
 
-	        var result = SendRequest(path, BuildQuery(listOfPairs));
+	        var result = SendRequest(path, queryPairs, HttpMethod.Get);
 
 	        return 0;
         }
 
-        private string SendRequest(string path, string query, bool hasHeader=false)
+        private string SendRequest(string path, List<Tuple<string, string>> queryPairs, HttpMethod method, 
+	        bool needSignature = false, bool hasHeader = false) //signature depends on header
         {
-	        var uriReq = new UriBuilder(uri.ToString() + path + query);
+	        var uriReq = new UriBuilder(uri + path + BuildQuery(queryPairs, needSignature));
 
 	        var request = new HttpRequestMessage()
 	        {
 		        RequestUri = uriReq.Uri,
-		        Method = HttpMethod.Post,
+		        Method = method,
 	        };
 
 	        if (hasHeader)
@@ -66,32 +67,22 @@ namespace CryptoClientLib
 			return httpContent.Result;
 		}
 
-        private string BuildQuery(Dictionary<string, string> listOfPairs)
+        private string BuildQuery(List<Tuple<string, string>> queryPairs, bool needSignature)
         {
 			StringBuilder query = new StringBuilder();
 
-			bool needSignature = false;
-			foreach (var pair in listOfPairs)
+			foreach (var pair in queryPairs)
 			{
-				if (pair.Key == "signature")
-				{
-					needSignature = true;
-				}
-				else
-				{
-					query.Append("&");
-					query.Append(pair.Key);
-					query.Append("=");
-					query.Append(pair.Value);
-				}
+				query.Append("&");
+				query.Append(pair.Item1);
+				query.Append("=");
+				query.Append(pair.Item2);
 			}
-
 			query.Remove(0, 1);
-			query.Remove(query.Length - 1, 1);
 
 			if (needSignature)
 			{
-				var signature = GetSignature(query.ToString());
+				var signature = ComputeSignature(query.ToString());
 				query.Append("&");
 				query.Append("signature");
 				query.Append("=");
@@ -101,7 +92,7 @@ namespace CryptoClientLib
 			return query.ToString();
         }
 
-        private string GetSignature(string query)
+        private string ComputeSignature(string query)
         {
             return StringUtilities.ComputeHMacSha256(query, privateKey);
         }
@@ -112,27 +103,27 @@ namespace CryptoClientLib
 	        var path = "api/v3/order?";
 	        string query = "";
 
-	        Dictionary<string, string> listOfPairs = new Dictionary<string, string>();
+	        List<Tuple<string, string>> queryPairs = new List<Tuple<string, string>>();
 
 	        if (orderType == OrderType.LIMIT)
 	        {
-		        listOfPairs.Add("symbol", symbol.ToString());
-		        listOfPairs.Add("side", ExtensionMethods.ToString(side));
-		        listOfPairs.Add("type", ExtensionMethods.ToString(orderType));
-		        listOfPairs.Add("timeInForce", "GTC");
-				listOfPairs.Add("quantity", "0.00001");
-				listOfPairs.Add("price", "10.00000");
-				listOfPairs.Add("newOrderRespType", "RESULT");
-				listOfPairs.Add("recvWindow", "5000");
-				listOfPairs.Add("timestamp", Timestamp);
-				listOfPairs.Add("signature", "");
+		        queryPairs.Add(new Tuple<string, string>("symbol", symbol.ToString()));
+		        queryPairs.Add(new Tuple<string, string>("side", ExtensionMethods.ToString(side)));
+		        queryPairs.Add(new Tuple<string, string>("type", ExtensionMethods.ToString(orderType)));
+		        queryPairs.Add(new Tuple<string, string>("timeInForce", "GTC"));
+				queryPairs.Add(new Tuple<string, string>("quantity", "0.00001"));
+				queryPairs.Add(new Tuple<string, string>("price", "10.00000"));
+				queryPairs.Add(new Tuple<string, string>("newOrderRespType", "RESULT"));
+				queryPairs.Add(new Tuple<string, string>("recvWindow", "5000"));
+				queryPairs.Add(new Tuple<string, string>("timestamp", Timestamp));
+
 	        }
 	        else
 	        {
 		        
 	        }
 
-	        var result = SendRequest(path, BuildQuery(listOfPairs), true);
+	        var result = SendRequest(path, queryPairs, HttpMethod.Post, true, true);
 
 			return null;
         }
