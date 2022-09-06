@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.XPath;
 using CryptoClientLib.Commons;
 using Newtonsoft.Json;
 
@@ -34,18 +35,17 @@ namespace CryptoClientLib
         public double GetPrice(Symbol symbol)
         {
 	        var path = "api/v3/ticker/price?";
-	        //var query = "symbol="+ ExtensionMethods.ToString(symbol);
+	        Dictionary<string, string> listOfPairs = new Dictionary<string, string>();
+	        listOfPairs.Add("symbol", symbol.ToString());
 
-	        //var result = SendRequest(path, query);
-
-	        symbol.ToString();
+	        var result = SendRequest(path, BuildQuery(listOfPairs));
 
 	        return 0;
         }
 
-        private string SendRequest(string path, string query, string signature = "", bool hasHeader=false)
+        private string SendRequest(string path, string query, bool hasHeader=false)
         {
-	        var uriReq = new UriBuilder(uri.ToString() + path + query + signature);
+	        var uriReq = new UriBuilder(uri.ToString() + path + query);
 
 	        var request = new HttpRequestMessage()
 	        {
@@ -66,45 +66,44 @@ namespace CryptoClientLib
 			return httpContent.Result;
 		}
 
-        private string BuildQuery(Symbol symbol, Side side = Side.Undefined,
-        string quantity = "", string expectedPrice = "", OrderType orderType = OrderType.Undefined)
+        private string BuildQuery(Dictionary<string, string> listOfPairs)
         {
-			//ListOfPairs strings
-	        StringBuilder query = new StringBuilder("symbol=", 300);
-	        //query.Append(ExtensionMethods.ToString(symbol));
-	        if (side != Side.Undefined)
-	        {
-		        query.Append("&side=");
-		        ExtensionMethods.ToString(side);
-	        }
+			StringBuilder query = new StringBuilder();
 
-	        if (orderType != OrderType.Undefined)
-	        {
-		        query.Append("&type=");
-		        ExtensionMethods.ToString(orderType);
-
-		        query.Append("&timeInForce=GTC");
-
-		        query.Append("&quantity=");
-		        query.Append(quantity);
-
-		        if (orderType == OrderType.LIMIT)
-		        {
-			        query.Append("&price=");
-			        query.Append(expectedPrice);
+			bool needSignature = false;
+			foreach (var pair in listOfPairs)
+			{
+				if (pair.Key == "signature")
+				{
+					needSignature = true;
 				}
+				else
+				{
+					query.Append("&");
+					query.Append(pair.Key);
+					query.Append("=");
+					query.Append(pair.Value);
+				}
+			}
 
-		        query.Append("&newOrderRespType=RESULT&recvWindow=8000");
-		        query.Append("&timestamp=");
-		        query.Append(Timestamp);
-	        }
+			query.Remove(0, 1);
+			query.Remove(query.Length - 1, 1);
 
-	        return query.ToString();
+			if (needSignature)
+			{
+				var signature = GetSignature(query.ToString());
+				query.Append("&");
+				query.Append("signature");
+				query.Append("=");
+				query.Append(signature);
+			}
+
+			return query.ToString();
         }
 
         private string GetSignature(string query)
         {
-            return "&signature=" + StringUtilities.ComputeHMacSha256(query, privateKey); //addtolistofpairs
+            return StringUtilities.ComputeHMacSha256(query, privateKey);
         }
 
         public Task<OrderData> CreateOrder(OrderType orderType, Symbol symbol, Side side, 
@@ -117,20 +116,25 @@ namespace CryptoClientLib
 
 	        if (orderType == OrderType.LIMIT)
 	        {
-		        query = BuildQuery(symbol, side, "0.00001", "10.00000", orderType);
 		        listOfPairs.Add("symbol", symbol.ToString());
-
-			}
+		        listOfPairs.Add("side", ExtensionMethods.ToString(side));
+		        listOfPairs.Add("type", ExtensionMethods.ToString(orderType));
+		        listOfPairs.Add("timeInForce", "GTC");
+				listOfPairs.Add("quantity", "0.00001");
+				listOfPairs.Add("price", "10.00000");
+				listOfPairs.Add("newOrderRespType", "RESULT");
+				listOfPairs.Add("recvWindow", "5000");
+				listOfPairs.Add("timestamp", Timestamp);
+				listOfPairs.Add("signature", "");
+	        }
 	        else
 	        {
 		        
 	        }
 
-	        var signature = GetSignature(query);
+	        var result = SendRequest(path, BuildQuery(listOfPairs), true);
 
-	        var result = SendRequest(path, query, signature, true);
-
-	        return null;
+			return null;
         }
     }
 }
