@@ -11,6 +11,6 @@ namespace CryptoClientLib
     {
 	    public Task<OrderData> CreateOrder(OrderType orderType, Symbol symbol, Side side, 
 		    double quantity = 0, double expectedPrice = 0);
-	    public double GetPrice(Symbol symbol);
+	    public Task<string> GetPrice(Symbol symbol);
     }
 }

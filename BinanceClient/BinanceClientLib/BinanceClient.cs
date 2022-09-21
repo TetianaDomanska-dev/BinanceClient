@@ -33,18 +33,51 @@ namespace CryptoClientLib
 	        get { return Convert.ToString(new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds()); }
         }
 
-        public double GetPrice(Symbol symbol)
+        public string GetTimestampByDate(DateTime date)
         {
-	        var path = "api/v3/ticker/price?";
-	        Dictionary<string, string> listOfPairs = new Dictionary<string, string>();
-	        listOfPairs.Add("symbol", symbol.ToString());
-
-	        var result = SendRequest(path, BuildQuery(listOfPairs), HttpMethod.Get);
-
-	        return Convert.ToDouble(result.GetValue("price"));
+	        return Convert.ToString(new DateTimeOffset(date).ToUnixTimeMilliseconds()); 
         }
 
-        private JObject SendRequest(string path, string query, HttpMethod httpMethod, bool hasHeader=false)
+        private UInt64 GetMillisecondsByInterval(string interval)
+        {
+	        UInt64 milisecInSec = 1000;
+	        UInt64 secInMin = 60;
+	        UInt64 minInHour = 60;
+
+	        var candleInterval = interval.Remove(0, interval.Length - 1);
+			var intervalCount = Convert.ToUInt64(interval.Remove(interval.Length - 1));
+			switch (candleInterval)
+	        {
+				case "s":
+					return intervalCount * milisecInSec;
+				case "m":
+					return intervalCount * secInMin * milisecInSec;
+				case "h":
+					return intervalCount * minInHour * secInMin* milisecInSec;
+	        }
+
+			return 0;
+        }
+		public async Task<string> GetPrice(Symbol symbol)
+		{
+			var path = "api/v3/ticker/price?";
+			Dictionary<string, string> listOfPairs = new Dictionary<string, string>();
+			listOfPairs.Add("symbol", symbol.ToString());
+
+			var result = await SendRequest(path, BuildQuery(listOfPairs), HttpMethod.Get);
+			var jsonResult = JObject.Parse(result);
+
+			Console.WriteLine("GetPrice: ");
+			foreach (var j in jsonResult)
+			{
+				Console.WriteLine(j.Key + " " + j.Value);
+			}
+			Console.WriteLine("-----------------------------------------");
+
+			return result;
+		}
+
+		private async Task<string> SendRequest(string path, string query, HttpMethod httpMethod, bool hasHeader=false)
         {
 	        var uriReq = new UriBuilder(uri.ToString() + path + query);
 
@@ -59,14 +92,10 @@ namespace CryptoClientLib
 		        request.Headers.Add("X-MBX-APIKEY", publicKey);
             }
 
-			var response = client.SendAsync(request);
-			response.Wait();
-			var httpContent = response.Result.Content.ReadAsStringAsync();
-			httpContent.Wait();
-			var jsonResult = JObject.Parse(httpContent.Result);
-
-			return jsonResult;
-		}
+			var response = await client.SendAsync(request);
+			var httpContent = await response.Content.ReadAsStringAsync();
+			return httpContent;
+        }
 
         private string BuildQuery(Dictionary<string, string> listOfPairs)
         {
@@ -107,7 +136,52 @@ namespace CryptoClientLib
             return StringUtilities.ComputeHMacSha256(query, privateKey);
         }
 
-        public Task<OrderData> CreateOrder(OrderType orderType, Symbol symbol, Side side, 
+        public async void GetKlines(Symbol symbol, string interval, UInt64 countOfCandles)
+        {
+	        var path = "api/v3/klines?";
+	        UInt64 limitMax = 1000;
+	        UInt64 limitDefault = 500;
+
+			UInt64 milliseconds = limitDefault * GetMillisecondsByInterval(interval);
+	        var endDate = Timestamp;
+
+	        List<string> candlesResultsList = new List<string>();
+
+			for (UInt64 i = 0; i < countOfCandles; i+=limitMax)
+	        {
+		        var startDate = Convert.ToString(Convert.ToUInt64(endDate) - milliseconds);
+
+		        Dictionary<string, string> listOfPairs = new Dictionary<string, string>();
+		        listOfPairs.Add("symbol", symbol.ToString());
+		        listOfPairs.Add("interval", interval);
+		        listOfPairs.Add("startTime", startDate);
+				listOfPairs.Add("endTime", endDate);
+		        listOfPairs.Add("limit", "1000");
+
+		        var result = await SendRequest(path, BuildQuery(listOfPairs), HttpMethod.Get);
+		        candlesResultsList.Add(result);
+				endDate = startDate;
+	        }
+
+			foreach (var candle in candlesResultsList)
+			{
+				var jsonResult = JArray.Parse(candle);
+				foreach (var j in jsonResult)
+				{
+					Console.WriteLine("[");
+					Console.WriteLine("Kline open time " + j[0]);
+					Console.WriteLine("Open price " + j[1]);
+					Console.WriteLine("High price " +j[2]);
+					Console.WriteLine("Low price "+j[3]);
+					Console.WriteLine("Close price "+j[4]);
+					Console.WriteLine("],");
+				}
+			}
+			Console.WriteLine("-----------------------------------------");
+			int k = 0;
+        }
+
+        public async Task<OrderData> CreateOrder(OrderType orderType, Symbol symbol, Side side, 
 	        double quantity = 0, double expectedPrice = 0)
         {
 	        var path = "api/v3/order?";
@@ -135,17 +209,25 @@ namespace CryptoClientLib
 				listOfPairs.Add("timeInForce", "GTC");
 				listOfPairs.Add("quantity", "0.00001");
 				listOfPairs.Add("newOrderRespType", "RESULT");
-				listOfPairs.Add("recvWindow", "5000");
+				listOfPairs.Add("recvWindow", "10000");
 				listOfPairs.Add("timestamp", Timestamp);
 				listOfPairs.Add("signature", "");
 			}
 
-	        var result = SendRequest(path, BuildQuery(listOfPairs),HttpMethod.Post, true);
+	        var result = await SendRequest(path, BuildQuery(listOfPairs),HttpMethod.Post, true);
+	        var jsonResult = JObject.Parse(result);
+
+	        Console.WriteLine("CreateOrder: ");
+	        foreach (var j in jsonResult)
+	        {
+				Console.WriteLine(j.Key + " " + j.Value);
+			}
+	        Console.WriteLine("-----------------------------------------");
 
 			return null;
         }
 
-		public Task<OrderData> DeleteOrder(string orderId, Symbol symbol)
+		public async Task<OrderData> DeleteOrder(string orderId, Symbol symbol)
 		{
 			var path = "api/v3/order?";
 
@@ -155,7 +237,7 @@ namespace CryptoClientLib
 			listOfPairs.Add("recvWindow", "5000");
 			listOfPairs.Add("timestamp", Timestamp);
 
-			var result = SendRequest(path, BuildQuery(listOfPairs), HttpMethod.Post, true);
+			var result = await SendRequest(path, BuildQuery(listOfPairs), HttpMethod.Post, true);
 
 			return null;
 		}
