@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Xml.XPath;
 using CryptoClientLib.Commons;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace CryptoClientLib
 {
@@ -38,19 +39,19 @@ namespace CryptoClientLib
 	        Dictionary<string, string> listOfPairs = new Dictionary<string, string>();
 	        listOfPairs.Add("symbol", symbol.ToString());
 
-	        var result = SendRequest(path, BuildQuery(listOfPairs));
+	        var result = SendRequest(path, BuildQuery(listOfPairs), HttpMethod.Get);
 
-	        return 0;
+	        return Convert.ToDouble(result.GetValue("price"));
         }
 
-        private string SendRequest(string path, string query, bool hasHeader=false)
+        private JObject SendRequest(string path, string query, HttpMethod httpMethod, bool hasHeader=false)
         {
 	        var uriReq = new UriBuilder(uri.ToString() + path + query);
 
 	        var request = new HttpRequestMessage()
 	        {
 		        RequestUri = uriReq.Uri,
-		        Method = HttpMethod.Post,
+		        Method = httpMethod,
 	        };
 
 	        if (hasHeader)
@@ -62,8 +63,9 @@ namespace CryptoClientLib
 			response.Wait();
 			var httpContent = response.Result.Content.ReadAsStringAsync();
 			httpContent.Wait();
+			var jsonResult = JObject.Parse(httpContent.Result);
 
-			return httpContent.Result;
+			return jsonResult;
 		}
 
         private string BuildQuery(Dictionary<string, string> listOfPairs)
@@ -87,7 +89,6 @@ namespace CryptoClientLib
 			}
 
 			query.Remove(0, 1);
-			query.Remove(query.Length - 1, 1);
 
 			if (needSignature)
 			{
@@ -110,7 +111,6 @@ namespace CryptoClientLib
 	        double quantity = 0, double expectedPrice = 0)
         {
 	        var path = "api/v3/order?";
-	        string query = "";
 
 	        Dictionary<string, string> listOfPairs = new Dictionary<string, string>();
 
@@ -129,12 +129,35 @@ namespace CryptoClientLib
 	        }
 	        else
 	        {
-		        
-	        }
+				listOfPairs.Add("symbol", symbol.ToString());
+				listOfPairs.Add("side", ExtensionMethods.ToString(side));
+				listOfPairs.Add("type", ExtensionMethods.ToString(orderType));
+				listOfPairs.Add("timeInForce", "GTC");
+				listOfPairs.Add("quantity", "0.00001");
+				listOfPairs.Add("newOrderRespType", "RESULT");
+				listOfPairs.Add("recvWindow", "5000");
+				listOfPairs.Add("timestamp", Timestamp);
+				listOfPairs.Add("signature", "");
+			}
 
-	        var result = SendRequest(path, BuildQuery(listOfPairs), true);
+	        var result = SendRequest(path, BuildQuery(listOfPairs),HttpMethod.Post, true);
 
 			return null;
         }
-    }
+
+		public Task<OrderData> DeleteOrder(string orderId, Symbol symbol)
+		{
+			var path = "api/v3/order?";
+
+			Dictionary<string, string> listOfPairs = new Dictionary<string, string>();
+			listOfPairs.Add("symbol", symbol.ToString());
+			listOfPairs.Add("orderId", "???");
+			listOfPairs.Add("recvWindow", "5000");
+			listOfPairs.Add("timestamp", Timestamp);
+
+			var result = SendRequest(path, BuildQuery(listOfPairs), HttpMethod.Post, true);
+
+			return null;
+		}
+	}
 }

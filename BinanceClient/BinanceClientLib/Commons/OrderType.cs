@@ -10,6 +10,8 @@ namespace CryptoClientLib.Commons
 	{
 		LIMIT,
 		MARKET,
+		STOP_LOSS,
+		TAKE_PROFIT,
 		Undefined
 	}
 }

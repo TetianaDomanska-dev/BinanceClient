@@ -29,6 +29,10 @@ namespace CryptoClientLib.Commons
 					return "LIMIT";
 				case OrderType.MARKET:
 					return "MARKET";
+				case OrderType.STOP_LOSS:
+					return "STOP_LOSS";
+				case OrderType.TAKE_PROFIT:
+					return "TAKE_PROFIT";
 				default:
 					return "Undefined";
 			}
