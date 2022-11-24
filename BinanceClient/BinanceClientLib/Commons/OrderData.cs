@@ -12,5 +12,8 @@ namespace CryptoClientLib.Commons
         public Symbol Symbol { get; set; }
         public double Price { get; set; }
         public OrderType OrderType { get; set; }
+        public string Timestamp { get; set; }
+        public double Quantity { get; set; }
+
     }
 }

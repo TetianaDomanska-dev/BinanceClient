@@ -13,7 +13,7 @@ using Newtonsoft.Json.Linq;
 
 namespace CryptoClientLib
 {
-    public  class BinanceClient : ICryptoClient
+    public class BinanceClient : ICryptoClient
     {
         private string publicKey;
         private string privateKey;
@@ -58,26 +58,34 @@ namespace CryptoClientLib
 
 			return 0;
         }
-		public async Task<string> GetPrice(Symbol symbol)
-		{
-			var path = "api/v3/ticker/price?";
-			Dictionary<string, string> listOfPairs = new Dictionary<string, string>();
-			listOfPairs.Add("symbol", symbol.ToString());
 
-			var result = await SendRequest(path, BuildQuery(listOfPairs), HttpMethod.Get);
-			var jsonResult = JObject.Parse(result);
+        public async Task<double> GetPrice(Symbol symbol)
+        {
+	        var path = "api/v3/ticker/price?";
+	        Dictionary<string, string> listOfPairs = new Dictionary<string, string>();
+	        listOfPairs.Add("symbol", symbol.ToString());
 
-			Console.WriteLine("GetPrice: ");
-			foreach (var j in jsonResult)
-			{
-				Console.WriteLine(j.Key + " " + j.Value);
-			}
-			Console.WriteLine("-----------------------------------------");
+	        var result = await SendRequest(path, BuildQuery(listOfPairs), HttpMethod.Get);
+	        var jsonResult = JObject.Parse(result);
 
-			return result;
-		}
+	        //TO DO logging in separate class
+	        Console.WriteLine("GetPrice: ");
+	        foreach (var j in jsonResult)
+	        {
+		        Console.WriteLine(j.Key + " " + j.Value);
+	        }
 
-		private async Task<string> SendRequest(string path, string query, HttpMethod httpMethod, bool hasHeader=false)
+	        Console.WriteLine("-----------------------------------------");
+
+	        if (jsonResult["price"] != null)
+	        {
+		        return Convert.ToDouble(jsonResult["price"]);
+	        }
+
+	        throw new Exception(Convert.ToString(jsonResult["msg"]));
+        }
+
+        private async Task<string> SendRequest(string path, string query, HttpMethod httpMethod, bool hasHeader=false)
         {
 	        var uriReq = new UriBuilder(uri.ToString() + path + query);
 
@@ -136,7 +144,7 @@ namespace CryptoClientLib
             return StringUtilities.ComputeHMacSha256(query, privateKey);
         }
 
-        public async void GetKlines(Symbol symbol, string interval, UInt64 countOfCandles)
+        public async Task<List<KlineData>> GetKlines(Symbol symbol, string interval, UInt64 countOfCandles)
         {
 	        var path = "api/v3/klines?";
 	        UInt64 limitMax = 1000;
@@ -146,6 +154,7 @@ namespace CryptoClientLib
 	        var endDate = Timestamp;
 
 	        List<string> candlesResultsList = new List<string>();
+	        List<KlineData> candlesResultsListInKlineDataFormat = new List<KlineData>();
 
 			for (UInt64 i = 0; i < countOfCandles; i+=limitMax)
 	        {
@@ -168,20 +177,39 @@ namespace CryptoClientLib
 				var jsonResult = JArray.Parse(candle);
 				foreach (var j in jsonResult)
 				{
+					candlesResultsListInKlineDataFormat.Add(new KlineData()
+					{
+						OpenTime = Convert.ToString(j[0]),
+						OpenPrice = Convert.ToDouble(j[1]),
+						HighPrice = Convert.ToDouble(j[2]),
+						LowPrice = Convert.ToDouble(j[3]),
+						ClosePrice = Convert.ToDouble(j[4]),
+						CloseTime = Convert.ToString(j[5])
+					});
+				}
+			}
+
+			//TO DO logging in separate class
+			foreach (var candle in candlesResultsList)
+			{
+				var jsonResult = JArray.Parse(candle);
+				foreach (var j in jsonResult)
+				{
 					Console.WriteLine("[");
 					Console.WriteLine("Kline open time " + j[0]);
 					Console.WriteLine("Open price " + j[1]);
-					Console.WriteLine("High price " +j[2]);
-					Console.WriteLine("Low price "+j[3]);
-					Console.WriteLine("Close price "+j[4]);
+					Console.WriteLine("High price " + j[2]);
+					Console.WriteLine("Low price " + j[3]);
+					Console.WriteLine("Close price " + j[4]);
 					Console.WriteLine("],");
 				}
 			}
 			Console.WriteLine("-----------------------------------------");
-			int k = 0;
+
+			return candlesResultsListInKlineDataFormat;
         }
 
-        public async Task<OrderData> CreateOrder(OrderType orderType, Symbol symbol, Side side, 
+        public async Task<OrderData> CreateOrder(OrderType orderType, Symbol symbol, Side side,
 	        double quantity = 0, double expectedPrice = 0)
         {
 	        var path = "api/v3/order?";
@@ -194,40 +222,49 @@ namespace CryptoClientLib
 		        listOfPairs.Add("side", ExtensionMethods.ToString(side));
 		        listOfPairs.Add("type", ExtensionMethods.ToString(orderType));
 		        listOfPairs.Add("timeInForce", "GTC");
-				listOfPairs.Add("quantity", "0.00001");
-				listOfPairs.Add("price", "10.00000");
-				listOfPairs.Add("newOrderRespType", "RESULT");
-				listOfPairs.Add("recvWindow", "5000");
-				listOfPairs.Add("timestamp", Timestamp);
-				listOfPairs.Add("signature", "");
+		        listOfPairs.Add("quantity", "0.00001");
+		        listOfPairs.Add("price", "10.00000");
+		        listOfPairs.Add("newOrderRespType", "RESULT");
+		        listOfPairs.Add("recvWindow", "5000");
+		        listOfPairs.Add("timestamp", Timestamp);
+		        listOfPairs.Add("signature", "");
 	        }
 	        else
 	        {
-				listOfPairs.Add("symbol", symbol.ToString());
-				listOfPairs.Add("side", ExtensionMethods.ToString(side));
-				listOfPairs.Add("type", ExtensionMethods.ToString(orderType));
-				listOfPairs.Add("timeInForce", "GTC");
-				listOfPairs.Add("quantity", "0.00001");
-				listOfPairs.Add("newOrderRespType", "RESULT");
-				listOfPairs.Add("recvWindow", "10000");
-				listOfPairs.Add("timestamp", Timestamp);
-				listOfPairs.Add("signature", "");
-			}
+		        listOfPairs.Add("symbol", symbol.ToString());
+		        listOfPairs.Add("side", ExtensionMethods.ToString(side));
+		        listOfPairs.Add("type", ExtensionMethods.ToString(orderType));
+		        listOfPairs.Add("timeInForce", "GTC");
+		        listOfPairs.Add("quantity", "0.00001");
+		        listOfPairs.Add("newOrderRespType", "RESULT");
+		        listOfPairs.Add("recvWindow", "10000");
+		        listOfPairs.Add("timestamp", Timestamp);
+		        listOfPairs.Add("signature", "");
+	        }
 
-	        var result = await SendRequest(path, BuildQuery(listOfPairs),HttpMethod.Post, true);
+	        var result = await SendRequest(path, BuildQuery(listOfPairs), HttpMethod.Post, true);
+
+	        List<OrderData> orderResults = new List<OrderData>();
 	        var jsonResult = JObject.Parse(result);
-
+	        //TO DO logging in separate class
 	        Console.WriteLine("CreateOrder: ");
 	        foreach (var j in jsonResult)
 	        {
-				Console.WriteLine(j.Key + " " + j.Value);
-			}
+		        Console.WriteLine(j.Key + " " + j.Value);
+	        }
 	        Console.WriteLine("-----------------------------------------");
 
-			return null;
+			return new OrderData()
+	        {
+		        Symbol = symbol,
+		        OrderType = orderType,
+		        Quantity = Convert.ToDouble(jsonResult["quantity"]),
+		        Price = Convert.ToDouble(jsonResult["price"]),
+		        Timestamp = Convert.ToString(jsonResult["timestamp"])
+	        };
         }
 
-		public async Task<OrderData> DeleteOrder(string orderId, Symbol symbol)
+        public async Task<OrderData> DeleteOrder(string orderId, Symbol symbol)
 		{
 			var path = "api/v3/order?";
 

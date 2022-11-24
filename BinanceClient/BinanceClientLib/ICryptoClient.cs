@@ -7,10 +7,13 @@ using CryptoClientLib.Commons;
 
 namespace CryptoClientLib
 {
-    internal interface ICryptoClient
+    public interface ICryptoClient
     {
 	    public Task<OrderData> CreateOrder(OrderType orderType, Symbol symbol, Side side, 
 		    double quantity = 0, double expectedPrice = 0);
-	    public Task<string> GetPrice(Symbol symbol);
+	    public Task<double> GetPrice(Symbol symbol);
+
+	    public Task<List<KlineData>> GetKlines(Symbol symbol, string interval, UInt64 countOfCandles);
+
     }
 }
